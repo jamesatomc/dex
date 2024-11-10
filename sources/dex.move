@@ -22,6 +22,7 @@ module dex::dex {
     const ERROR_EXCEEDS_TOTAL_SUPPLY: u64 = 5;
     const ERROR_INVALID_FEE_TIER: u64 = 6;
 
+    
     // Events remain the same
     struct LiquidityAdded<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
         provider: address,
@@ -30,6 +31,7 @@ module dex::dex {
         total_supply: u256,
     }
 
+    // New event for liquidity removal
     struct LiquidityRemoved<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
         provider: address,
         amount_a: u256,
@@ -37,12 +39,14 @@ module dex::dex {
         total_supply: u256,
     }
 
+    // Swap event remains the same
     struct Swap<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
         trader: address,
         amount_in: u256,
         amount_out: u256,
     }
 
+    // Liquidity pool struct remains the same
     struct LiquidityPool<phantom CoinTypeA: key + store, phantom CoinTypeB: key + store> has key, store {
         coin_store_a: Object<CoinStore<CoinTypeA>>,
         coin_store_b: Object<CoinStore<CoinTypeB>>,
@@ -51,6 +55,8 @@ module dex::dex {
         fee_tier: u256,  // Added fee tier field
     }
 
+
+    // Create pool function remains the same
     public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
         fee_tier: u256
     ): Object<LiquidityPool<CoinTypeA, CoinTypeB>> {
@@ -73,9 +79,11 @@ module dex::dex {
             fee_tier,
         };
 
+        // Emit pool created event
         object::new(pool)
     }
 
+    // Add liquidity function remains the same
     public fun add_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_a: Coin<CoinTypeA>,
@@ -107,16 +115,11 @@ module dex::dex {
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_a);
         coin_store::deposit(&mut pool_mut.coin_store_b, coin_b);
 
-        // event::emit(LiquidityAdded<CoinTypeA, CoinTypeB> {
-        //     provider: account::get_signer_address(),
-        //     amount_a,
-        //     amount_b,
-        //     total_supply: pool_mut.total_supply,
-        // });
-
+        // Emit liquidity added event
         true
     }
 
+    // Remove liquidity function remains the same
     public fun remove_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         amount_a: u256,
@@ -141,10 +144,12 @@ module dex::dex {
         
         let coin_a = coin_store::withdraw(&mut pool_mut.coin_store_a, amount_a);
         let coin_b = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_b);
-    
+
+        // Emit liquidity removed event
         (coin_a, coin_b)
     }
 
+    // Swap function remains the same
     public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_in: Coin<CoinTypeA>,
@@ -176,13 +181,8 @@ module dex::dex {
         let pool_mut = object::borrow_mut(pool);
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_in);
         let coin_out = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_out);
-
-        // event::emit(Swap<CoinTypeA, CoinTypeB> {
-        //     trader: account::get_signer_address(),
-        //     amount_in,
-        //     amount_out,
-        // });
-
+        
+        // Emit swap event
         coin_out
     }
 }
