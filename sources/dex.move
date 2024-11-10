@@ -265,5 +265,18 @@ module dex::dex {
         let pool_obj = object::new(pool);
         object::transfer(pool_obj, tx_context::sender());
     }
+    
+    public fun get_fee_tier<CoinTypeA: key + store, CoinTypeB: key + store>(
+        pool: &Object<LiquidityPool<CoinTypeA, CoinTypeB>>
+    ): u256 {
+        let pool_ref = object::borrow(pool);
+        pool_ref.fee_tier
+    }
 
+    public fun get_total_supply<CoinTypeA: key + store, CoinTypeB: key + store>(
+        pool: &Object<LiquidityPool<CoinTypeA, CoinTypeB>>
+    ): u256 {
+        let pool_ref = object::borrow(pool);
+        pool_ref.total_supply
+    }
 }
