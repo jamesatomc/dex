@@ -198,7 +198,6 @@ module dex::dex {
         let coin_a = coin_store::withdraw(&mut pool_mut.coin_store_a, amount_a);
         let coin_b = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_b);
 
-        // Emit liquidity removed event
         (coin_a, coin_b)
     }
 
