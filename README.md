@@ -93,6 +93,7 @@ public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
 2. Add initial liquidity
 3. Users can:
    - Add liquidity
+   - Create Pool
    - Swap tokens
    - Remove liquidity (to be implemented)
 
