@@ -16,9 +16,10 @@ A Move implementation of an Automated Market Maker (AMM) DEX on Rooch blockchain
 ### Constants
 
 ```move
-const FEE_NUMERATOR: u256 = 3;      // 0.3% fee
-const FEE_DENOMINATOR: u256 = 1000;
-const MINIMUM_LIQUIDITY: u256 = 1000;
+   const FEE_TIER_LOW: u256 = 1;    // 0.1% fee
+    const FEE_TIER_MEDIUM: u256 = 5;  // 0.5% fee
+    const FEE_TIER_HIGH: u256 = 10;   // 1.0% fee
+    const FEE_DENOMINATOR: u256 = 1000;
 ```
 
 ### Error Codes
@@ -35,7 +36,9 @@ const ERROR_INVALID_RATIO: u64 = 4;
 #### create_pool
 Creates new liquidity pool for token pair
 ```move
-public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(): Object<LiquidityPool<CoinTypeA, CoinTypeB>>
+public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
+    fee_tier: u256
+): Object<LiquidityPool<CoinTypeA, CoinTypeB>>
 ```
 
 #### add_liquidity
@@ -50,6 +53,17 @@ public fun add_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
 ): bool
 ```
 
+#### remove_liquidity
+Remove liquidity to pool with slippage protection
+```move
+public fun remove_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
+    pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
+    amount_a: u256,
+    amount_b: u256
+): bool
+```
+
+
 #### swap
 Swap tokens with slippage protection
 ```move
@@ -62,12 +76,16 @@ public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
 
 ## Safety Features
 
-- Minimum liquidity requirement
-- Slippage protection
-- Safe math checks
-- Constant product verification
-- Input validation
-- Balance checks
+- **Minimum Liquidity Lock**: Initial liquidity providers must provide minimum amounts to prevent manipulation
+- **Slippage Protection**: Users can specify minimum output amounts for swaps
+- **Overflow Protection**: Safe math operations to prevent numeric overflow/underflow
+- **Constant Product Invariant**: Ensures k = x * y is maintained after each trade
+- **Input Validation**: 
+  - Non-zero amounts
+  - Valid fee tiers
+  - Sufficient balances
+- **Balance Verification**: Pre and post-trade balance checks
+- **Front-running Mitigation**: Time-weighted price calculations (planned)
 
 ## Usage
 
