@@ -98,7 +98,7 @@ public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
 
 ## Formula
 
-- Swap fee: 0.3%
+- Swap fee: 0.1%, 0.5%, 1.0%
 - Constant product: k = x * y
 - Output amount: (y * Δx) / (x + Δx)
 - Price impact increases with larger swaps
