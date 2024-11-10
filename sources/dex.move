@@ -5,9 +5,12 @@ module dex::dex {
     use moveos_std::event;
     use rooch_framework::account;
 
-    // Constants
-    const FEE_NUMERATOR: u256 = 3;
+    // Fee tier constants
+    const FEE_TIER_LOW: u256 = 1;    // 0.1%
+    const FEE_TIER_MEDIUM: u256 = 5;  // 0.5%
+    const FEE_TIER_HIGH: u256 = 10;   // 1.0%
     const FEE_DENOMINATOR: u256 = 1000;
+    
     const MINIMUM_LIQUIDITY: u256 = 1000;
     const BASIS_POINTS: u256 = 10000;
 
@@ -17,8 +20,9 @@ module dex::dex {
     const ERROR_SLIPPAGE: u64 = 3;
     const ERROR_INVALID_RATIO: u64 = 4;
     const ERROR_EXCEEDS_TOTAL_SUPPLY: u64 = 5;
+    const ERROR_INVALID_FEE_TIER: u64 = 6;
 
-    // Events
+    // Events remain the same
     struct LiquidityAdded<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
         provider: address,
         amount_a: u256,
@@ -44,9 +48,20 @@ module dex::dex {
         coin_store_b: Object<CoinStore<CoinTypeB>>,
         total_supply: u256,
         minimum_liquidity: u256,
+        fee_tier: u256,  // Added fee tier field
     }
 
-    public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(): Object<LiquidityPool<CoinTypeA, CoinTypeB>> {
+    public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
+        fee_tier: u256
+    ): Object<LiquidityPool<CoinTypeA, CoinTypeB>> {
+        // Validate fee tier
+        assert!(
+            fee_tier == FEE_TIER_LOW || 
+            fee_tier == FEE_TIER_MEDIUM || 
+            fee_tier == FEE_TIER_HIGH,
+            ERROR_INVALID_FEE_TIER
+        );
+
         let coin_store_a = coin_store::create_coin_store<CoinTypeA>();
         let coin_store_b = coin_store::create_coin_store<CoinTypeB>();
         
@@ -55,6 +70,7 @@ module dex::dex {
             coin_store_b,
             total_supply: 0,
             minimum_liquidity: MINIMUM_LIQUIDITY,
+            fee_tier,
         };
 
         object::new(pool)
@@ -113,21 +129,19 @@ module dex::dex {
         assert!(amount_a > 0 && amount_b > 0, ERROR_ZERO_AMOUNT);
         assert!(amount_a <= reserve_a && amount_b <= reserve_b, ERROR_INSUFFICIENT_LIQUIDITY);
         assert!((amount_a * reserve_b) == (amount_b * reserve_a), ERROR_INVALID_RATIO);
-
+    
         let pool_mut = object::borrow_mut(pool);
         let share = (amount_a * BASIS_POINTS) / reserve_a;
-        pool_mut.total_supply = pool_mut.total_supply - ((pool_mut.total_supply * share) / BASIS_POINTS);
+        
+        // Add check for exceeding total supply
+        let supply_to_remove = (pool_mut.total_supply * share) / BASIS_POINTS;
+        assert!(supply_to_remove <= pool_mut.total_supply, ERROR_EXCEEDS_TOTAL_SUPPLY);
+        
+        pool_mut.total_supply = pool_mut.total_supply - supply_to_remove;
         
         let coin_a = coin_store::withdraw(&mut pool_mut.coin_store_a, amount_a);
         let coin_b = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_b);
-
-        // event::emit(LiquidityRemoved<CoinTypeA, CoinTypeB> {
-        //     provider: account::get_signer_address(),
-        //     amount_a,
-        //     amount_b,
-        //     total_supply: pool_mut.total_supply,
-        // });
-
+    
         (coin_a, coin_b)
     }
 
@@ -144,7 +158,8 @@ module dex::dex {
         let reserve_b = coin_store::balance(&pool_ref.coin_store_b);
         assert!(reserve_a > 0 && reserve_b > 0, ERROR_INSUFFICIENT_LIQUIDITY);
 
-        let amount_in_with_fee = amount_in * (FEE_DENOMINATOR - FEE_NUMERATOR);
+        // Use pool's fee tier for calculation
+        let amount_in_with_fee = amount_in * (FEE_DENOMINATOR - pool_ref.fee_tier);
         let numerator = amount_in_with_fee * reserve_b;
         let denominator = (reserve_a * FEE_DENOMINATOR) + amount_in_with_fee;
         
