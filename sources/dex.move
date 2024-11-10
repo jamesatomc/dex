@@ -2,8 +2,7 @@ module dex::dex {
     use moveos_std::object::{Self, Object};
     use rooch_framework::coin::{Self, Coin};
     use rooch_framework::coin_store::{Self, CoinStore};
-    use moveos_std::event;
-    use rooch_framework::account;
+
 
     // Fee tier constants
     const FEE_TIER_LOW: u256 = 1;    // 0.1%
@@ -185,4 +184,5 @@ module dex::dex {
         // Emit swap event
         coin_out
     }
+    
 }
