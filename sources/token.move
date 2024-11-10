@@ -1,83 +1,79 @@
 module dex::token {
-    use moveos_std::event;
+    use std::string;
+    use std::option;
     use moveos_std::object::{Self, Object};
-    use moveos_std::object::ObjectID;
-    use moveos_std::address;
-    use rooch_framework::coin_store::CoinStore;
-    use rooch_framework::coin::{Self, Coin};
+    use rooch_framework::coin::{Self, CoinInfo};
 
-    // Constants
-    const TOTAL_SUPPLY: u64 = 100000000000000; // 100 billion
+    // Error codes
+    const ERR_NOT_INITIALIZED: u64 = 1;
+    const ERR_ALREADY_INITIALIZED: u64 = 2;
+    const ERR_INVALID_AMOUNT: u64 = 3;
+    const ERR_SUPPLY_EXCEEDED: u64 = 4;
+
+    // Token configuration
+    const NAME: vector<u8> = b"MyToken";
+    const SYMBOL: vector<u8> = b"MTK";
     const DECIMALS: u8 = 9;
-    
-    struct Token has key, store, drop, copy {
-        name: vector<u8>,
-        symbol: vector<u8>,
+    const MAX_SUPPLY: u256 = 100_000_000_000; // 100 billion
+
+    struct Token has key, store, drop {
+        name: string::String,
+        symbol: string::String,
         decimals: u8,
-        total_supply: u64,
-        value: u64,
-        address: address,
+        total_supply: u256,
     }
 
-    // Events
-    struct MintEvent has drop, store, copy {
-        amount: u64,
-        recipient: address
-    }
-
-    public fun create_token(value: Token): Object<Token> {
-        object::new(value)
-    }
-
-    public fun mint(amount: u64, recipient: address): Object<Token> {
-        assert!(amount <= TOTAL_SUPPLY, 1); // Check supply limit
-        
-        let token = Token {
-            name: b"MyToken",
-            symbol: b"MTK",
-            decimals: DECIMALS,
-            total_supply: TOTAL_SUPPLY,
-            value: amount,
-            address: recipient
-        };
-
-        event::emit(MintEvent {
-            amount,
-            recipient
-        });
-
-        create_token(token)
-    }
-
-    public fun store_token(obj: Object<Token>) {
-        object::transfer(obj, @0x1)
-    }
-
+    /// Initialize token
     fun init() {
+        // Check if already initialized
+        assert!(!coin::is_registered<Token>(), ERR_ALREADY_INITIALIZED);
+
+        // Register token with metadata
+        let coin_info = coin::register_extend<Token>(
+            string::utf8(NAME),
+            string::utf8(SYMBOL),
+            option::some(string::utf8(b"https://example.com/token-icon.png")),
+            DECIMALS
+        );
+
+        // Create token object
         let token = Token {
-            name: b"MyToken",
-            symbol: b"MTK", 
+            name: string::utf8(NAME),
+            symbol: string::utf8(SYMBOL),
             decimals: DECIMALS,
-            total_supply: TOTAL_SUPPLY,
-            value: 0,
-            address: @0x0,
+            total_supply: 0
         };
 
-        let obj = create_token(token);
-        store_token(obj);
+        // Store token info
+        let token_obj = object::new(token);
+        object::transfer(coin_info, @0x0);
+        object::transfer(token_obj, @0x0);
+    }
+
+    /// Mint new tokens
+    public fun mint(coin_info: &mut Object<CoinInfo<Token>>, amount: u256): coin::Coin<Token> {
+        // Validate amount
+        assert!(amount > 0, ERR_INVALID_AMOUNT);
+        
+        // Check max supply
+        let supply = coin::supply(object::borrow(coin_info));
+        assert!(supply + amount <= MAX_SUPPLY, ERR_SUPPLY_EXCEEDED);
+
+        coin::mint(coin_info, amount)
+    }
+
+    /// Burn tokens
+    public fun burn(coin_info: &mut Object<CoinInfo<Token>>, coin: coin::Coin<Token>) {
+        coin::burn(coin_info, coin);
     }
 
     #[test_only]
-    public fun create_test_token(): Token {
-        Token {
-            name: b"MyToken",
-            symbol: b"MTK",
-            decimals: DECIMALS,
-            total_supply: TOTAL_SUPPLY,
-            value: 0,
-            address: @0x1,
-        }
+    public fun setup_test(): Object<CoinInfo<Token>> {
+        coin::register_extend<Token>(
+            string::utf8(NAME),
+            string::utf8(SYMBOL),
+            option::none(),
+            DECIMALS
+        )
     }
 }
-
-
