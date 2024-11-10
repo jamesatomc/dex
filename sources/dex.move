@@ -1,7 +1,5 @@
 module dex::dex {
-    use moveos_std::event;
     use moveos_std::object::{Self, Object};
-    use moveos_std::object::ObjectID;
     
     struct SwapA has key, store, drop, copy {
         A: u64,
