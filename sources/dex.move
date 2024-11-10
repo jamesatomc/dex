@@ -2,7 +2,8 @@ module dex::dex {
     use moveos_std::object::{Self, Object};
     use rooch_framework::coin::{Self, Coin};
     use rooch_framework::coin_store::{Self, CoinStore};
-
+    use moveos_std::event;
+    use moveos_std::tx_context;
 
     // Fee tier constants
     const FEE_TIER_LOW: u256 = 1;    // 0.1%
@@ -21,6 +22,9 @@ module dex::dex {
     const ERROR_EXCEEDS_TOTAL_SUPPLY: u64 = 5;
     const ERROR_INVALID_FEE_TIER: u64 = 6;
 
+    // Add swap-specific error codes
+    const ERROR_INVALID_FEE: u64 = 7;
+    const ERROR_SWAP_CALCULATION: u64 = 8;
     
     // Events remain the same
     struct LiquidityAdded<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
@@ -51,7 +55,20 @@ module dex::dex {
         coin_store_b: Object<CoinStore<CoinTypeB>>,
         total_supply: u256,
         minimum_liquidity: u256,
-        fee_tier: u256,  // Added fee tier field
+        fee_tier: u256,
+    }
+
+
+    // Define concrete types for initialization
+    struct TokenA has key, store, drop {}
+    struct TokenB has key, store, drop {}
+
+    // Swap event structure
+    struct SwapEvent<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
+        amount_in: u256,
+        amount_out: u256,
+        fee_amount: u256,
+        trader: address
     }
 
 
@@ -67,12 +84,10 @@ module dex::dex {
             ERROR_INVALID_FEE_TIER
         );
 
-        let coin_store_a = coin_store::create_coin_store<CoinTypeA>();
-        let coin_store_b = coin_store::create_coin_store<CoinTypeB>();
         
         let pool = LiquidityPool {
-            coin_store_a,
-            coin_store_b,
+            coin_store_a: coin_store::create_coin_store<CoinTypeA>(),
+            coin_store_b: coin_store::create_coin_store<CoinTypeB>(),
             total_supply: 0,
             minimum_liquidity: MINIMUM_LIQUIDITY,
             fee_tier,
@@ -162,17 +177,20 @@ module dex::dex {
         let reserve_b = coin_store::balance(&pool_ref.coin_store_b);
         assert!(reserve_a > 0 && reserve_b > 0, ERROR_INSUFFICIENT_LIQUIDITY);
 
-        // Use pool's fee tier for calculation
+        // Calculate fee and amounts
+        assert!(pool_ref.fee_tier <= FEE_DENOMINATOR, ERROR_INVALID_FEE);
         let amount_in_with_fee = amount_in * (FEE_DENOMINATOR - pool_ref.fee_tier);
+        let fee_amount = amount_in * pool_ref.fee_tier / FEE_DENOMINATOR;
+        
         let numerator = amount_in_with_fee * reserve_b;
         let denominator = (reserve_a * FEE_DENOMINATOR) + amount_in_with_fee;
+        assert!(denominator > 0, ERROR_SWAP_CALCULATION);
         
-        assert!(denominator > 0, ERROR_INSUFFICIENT_LIQUIDITY);
         let amount_out = numerator / denominator;
-        
         assert!(amount_out >= min_out, ERROR_SLIPPAGE);
         assert!(amount_out < reserve_b, ERROR_INSUFFICIENT_LIQUIDITY);
 
+        // Verify constant product formula
         let reserve_a_after = reserve_a + amount_in;
         let reserve_b_after = reserve_b - amount_out;
         assert!(reserve_a_after * reserve_b_after >= reserve_a * reserve_b, ERROR_INVALID_RATIO);
@@ -180,9 +198,34 @@ module dex::dex {
         let pool_mut = object::borrow_mut(pool);
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_in);
         let coin_out = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_out);
+
         
-        // Emit swap event
+        // Emit swap event with explicit types
+        event::emit(SwapEvent<CoinTypeA, CoinTypeB> {
+            amount_in,
+            amount_out,
+            fee_amount,
+            trader: tx_context::sender()
+        });
+
         coin_out
     }
-    
+
+
+    fun init() {
+        let default_fee_tier = FEE_TIER_LOW;
+        let default_min_liquidity = MINIMUM_LIQUIDITY;
+        
+        let pool = LiquidityPool<TokenA, TokenB> {
+            coin_store_a: coin_store::create_coin_store<TokenA>(),
+            coin_store_b: coin_store::create_coin_store<TokenB>(),
+            total_supply: 0,
+            minimum_liquidity: default_min_liquidity,
+            fee_tier: default_fee_tier
+        };
+
+        let pool_obj = object::new(pool);
+        object::transfer(pool_obj, tx_context::sender());
+    }
+
 }
