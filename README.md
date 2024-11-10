@@ -8,7 +8,7 @@ A Move implementation of an Automated Market Maker (AMM) DEX on Rooch blockchain
 - Adding liquidity
 - Token swapping
 - Constant product formula (x*y=k)
-- 0.3% swap fee
+- 0.1%, 0.5%, 1.0% swap fee
 - Slippage protection
 
 ## Technical Details
