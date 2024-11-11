@@ -136,40 +136,102 @@ module dex::dex {
         object::new(pool)
     }
 
-    // Add liquidity function remains the same
+    // Add this at the top of the module with other struct definitions
+    struct LiquidityAddedEvent<phantom CoinTypeA, phantom CoinTypeB> has copy, drop {
+        amount_a: u256,
+        amount_b: u256,
+        liquidity_minted: u256,
+        provider: address
+    }
+
+    // Helper function to calculate initial liquidity
+    fun calculate_initial_liquidity(
+        amount_a: u256,
+        amount_b: u256,
+        minimum_liquidity: u256
+    ): u256 {
+        assert!(
+            amount_a >= minimum_liquidity && amount_b >= minimum_liquidity,
+            ERROR_INSUFFICIENT_LIQUIDITY
+        );
+        amount_a // Using amount_a as initial liquidity
+    }
+    
+    // Helper function to calculate additional liquidity
+    fun calculate_additional_liquidity(
+        amount_a: u256,
+        reserve_a: u256,
+        total_supply: u256
+    ): u256 {
+        (amount_a * total_supply) / reserve_a
+    }
+    
+    // Helper function to validate ratios
+    fun validate_ratios(
+        amount_a: u256,
+        amount_b: u256,
+        reserve_a: u256,
+        reserve_b: u256
+    ) {
+        let ratio_a = (amount_a * FEE_DENOMINATOR) / reserve_a;
+        let ratio_b = (amount_b * FEE_DENOMINATOR) / reserve_b;
+        assert!(
+            ratio_a > 0 && ratio_b > 0 &&
+            (ratio_a * 99 <= ratio_b * 100) &&
+            (ratio_b * 99 <= ratio_a * 100),
+            ERROR_INVALID_RATIO
+        );
+    }
+    
+    // Updated add_liquidity function
     public fun add_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_a: Coin<CoinTypeA>,
         coin_b: Coin<CoinTypeB>,
         min_a: u256,
         min_b: u256,
-    ): bool {
+    ): u256 {  // Return actual liquidity added
         let amount_a = coin::value(&coin_a);
         let amount_b = coin::value(&coin_b);
         assert!(amount_a > 0 && amount_b > 0, ERROR_ZERO_AMOUNT);
         assert!(amount_a >= min_a && amount_b >= min_b, ERROR_SLIPPAGE);
-
+    
         let pool_ref = object::borrow(pool);
         let reserve_a = coin_store::balance(&pool_ref.coin_store_a);
         let reserve_b = coin_store::balance(&pool_ref.coin_store_b);
-
+    
         let pool_mut = object::borrow_mut(pool);
+        let liquidity_added: u256;
+    
         if (pool_mut.total_supply == 0) {
-            assert!(amount_a >= pool_mut.minimum_liquidity && amount_b >= pool_mut.minimum_liquidity, ERROR_INSUFFICIENT_LIQUIDITY);
-            pool_mut.total_supply = amount_a;
+            liquidity_added = calculate_initial_liquidity(
+                amount_a,
+                amount_b,
+                pool_mut.minimum_liquidity
+            );
+            pool_mut.total_supply = liquidity_added;
         } else {
-            let ratio_a = (amount_a * FEE_DENOMINATOR) / reserve_a;
-            let ratio_b = (amount_b * FEE_DENOMINATOR) / reserve_b;
-            assert!(ratio_a > 0 && ratio_b > 0 && (ratio_a * 99 <= ratio_b * 100) && (ratio_b * 99 <= ratio_a * 100), ERROR_INVALID_RATIO);
-            
-            pool_mut.total_supply = pool_mut.total_supply + ((amount_a * pool_mut.total_supply) / reserve_a);
+            validate_ratios(amount_a, amount_b, reserve_a, reserve_b);
+            liquidity_added = calculate_additional_liquidity(
+                amount_a,
+                reserve_a,
+                pool_mut.total_supply
+            );
+            pool_mut.total_supply = pool_mut.total_supply + liquidity_added;
         };
-
+    
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_a);
         coin_store::deposit(&mut pool_mut.coin_store_b, coin_b);
-
+    
         // Emit liquidity added event
-        true
+        event::emit(LiquidityAddedEvent<CoinTypeA, CoinTypeB> {
+            amount_a,
+            amount_b,
+            liquidity_minted: liquidity_added,
+            provider: tx_context::sender()
+        });
+    
+        liquidity_added
     }
 
     // Remove liquidity function remains the same
@@ -201,7 +263,35 @@ module dex::dex {
         (coin_a, coin_b)
     }
 
-    // Swap function remains the same
+    // Helper function to calculate swap amounts
+    fun calculate_swap_amounts<CoinTypeA, CoinTypeB>(
+        amount_in: u256,
+        reserve_a: u256,
+        reserve_b: u256,
+        fee_tier: u256
+    ): (u256, u256) {
+        let amount_in_with_fee = amount_in * (FEE_DENOMINATOR - fee_tier);
+        let fee_amount = amount_in * fee_tier / FEE_DENOMINATOR;
+        
+        let numerator = amount_in_with_fee * reserve_b;
+        let denominator = (reserve_a * FEE_DENOMINATOR) + amount_in_with_fee;
+        assert!(denominator > 0, ERROR_SWAP_CALCULATION);
+        
+        let amount_out = numerator / denominator;
+        (amount_out, fee_amount)
+    }
+    
+    // Helper function to verify constant product formula
+    fun verify_constant_product(
+        reserve_a: u256,
+        reserve_b: u256,
+        reserve_a_after: u256,
+        reserve_b_after: u256
+    ) {
+        assert!(reserve_a_after * reserve_b_after >= reserve_a * reserve_b, ERROR_INVALID_RATIO);
+    }
+    
+    // Modified main swap function
     public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_in: Coin<CoinTypeA>,
@@ -209,46 +299,45 @@ module dex::dex {
     ): Coin<CoinTypeB> {
         let amount_in = coin::value(&coin_in);
         assert!(amount_in > 0, ERROR_ZERO_AMOUNT);
-
+    
         let pool_ref = object::borrow(pool);
         let reserve_a = coin_store::balance(&pool_ref.coin_store_a);
         let reserve_b = coin_store::balance(&pool_ref.coin_store_b);
         assert!(reserve_a > 0 && reserve_b > 0, ERROR_INSUFFICIENT_LIQUIDITY);
-
-        // Calculate fee and amounts
         assert!(pool_ref.fee_tier <= FEE_DENOMINATOR, ERROR_INVALID_FEE);
-        let amount_in_with_fee = amount_in * (FEE_DENOMINATOR - pool_ref.fee_tier);
-        let fee_amount = amount_in * pool_ref.fee_tier / FEE_DENOMINATOR;
-        
-        let numerator = amount_in_with_fee * reserve_b;
-        let denominator = (reserve_a * FEE_DENOMINATOR) + amount_in_with_fee;
-        assert!(denominator > 0, ERROR_SWAP_CALCULATION);
-        
-        let amount_out = numerator / denominator;
+    
+        // Calculate swap amounts using helper
+        let (amount_out, fee_amount) = calculate_swap_amounts<CoinTypeA, CoinTypeB>(
+            amount_in,
+            reserve_a,
+            reserve_b,
+            pool_ref.fee_tier
+        );
+    
         assert!(amount_out >= min_out, ERROR_SLIPPAGE);
         assert!(amount_out < reserve_b, ERROR_INSUFFICIENT_LIQUIDITY);
-
-        // Verify constant product formula
-        let reserve_a_after = reserve_a + amount_in;
-        let reserve_b_after = reserve_b - amount_out;
-        assert!(reserve_a_after * reserve_b_after >= reserve_a * reserve_b, ERROR_INVALID_RATIO);
-
+    
+        // Verify constant product using helper
+        verify_constant_product(
+            reserve_a,
+            reserve_b,
+            reserve_a + amount_in,
+            reserve_b - amount_out
+        );
+    
         let pool_mut = object::borrow_mut(pool);
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_in);
         let coin_out = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_out);
-
-        
-        // Emit swap event with explicit types
+    
         event::emit(SwapEvent<CoinTypeA, CoinTypeB> {
             amount_in,
             amount_out,
             fee_amount,
             trader: tx_context::sender()
         });
-
+    
         coin_out
     }
-
 
     fun init() {
         let default_fee_tier = FEE_TIER_LOW;
