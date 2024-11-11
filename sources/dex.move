@@ -38,11 +38,16 @@
 /// - `init`: Initializes the module with default values
 
 module dex::dex {
-    use moveos_std::object::{Self, Object};
+    use moveos_std::object::{Self, Object};  // Updated import
+    // use moveos_std::address;
     use rooch_framework::coin::{Self, Coin};
     use rooch_framework::coin_store::{Self, CoinStore};
     use moveos_std::event;
-    use moveos_std::tx_context;
+    use moveos_std::tx_context::{Self};
+    // use std::option;
+    // use std::string;
+
+
 
     // Fee tier constants
     const FEE_TIER_LOW: u256 = 1;    // 0.1%
@@ -52,6 +57,8 @@ module dex::dex {
     
     const MINIMUM_LIQUIDITY: u256 = 1000;
     const BASIS_POINTS: u256 = 10000;
+    const MAX_TRANSACTION_SIZE: u256 = 1000000; // 1M tokens
+    const MAX_PRICE_IMPACT: u256 = 300; // 3%
 
     // Error codes
     const ERROR_ZERO_AMOUNT: u64 = 1;
@@ -60,10 +67,12 @@ module dex::dex {
     const ERROR_INVALID_RATIO: u64 = 4;
     const ERROR_EXCEEDS_TOTAL_SUPPLY: u64 = 5;
     const ERROR_INVALID_FEE_TIER: u64 = 6;
-
-    // Add swap-specific error codes
     const ERROR_INVALID_FEE: u64 = 7;
     const ERROR_SWAP_CALCULATION: u64 = 8;
+    // const ERROR_MATH: u64 = 9;
+    const ERROR_UNAUTHORIZED: u64 = 10;
+    const ERROR_PAUSED: u64 = 11;
+    const ERROR_MAX_IMPACT: u64 = 12;
     
     // Events remain the same
     struct LiquidityAdded<phantom CoinTypeA, phantom CoinTypeB> has copy, drop, store {
@@ -88,13 +97,64 @@ module dex::dex {
         amount_out: u256,
     }
 
+    // Pool state tracking
+    struct PoolState has store {
+        paused: bool,
+        admin: address,
+        last_price: u256,
+    }
+
     // Liquidity pool struct remains the same
     struct LiquidityPool<phantom CoinTypeA: key + store, phantom CoinTypeB: key + store> has key, store {
         coin_store_a: Object<CoinStore<CoinTypeA>>,
         coin_store_b: Object<CoinStore<CoinTypeB>>,
         total_supply: u256,
-        minimum_liquidity: u256,
+        minimum_liquidity: u256,  
         fee_tier: u256,
+        state: PoolState
+    }
+
+    // Constants for u256 limits
+    const U256_MAX: u256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+
+    // Additional error codes
+    const ERROR_OVERFLOW: u64 = 13;
+    const ERROR_UNDERFLOW: u64 = 14;
+    const ERROR_DIVIDE_BY_ZERO: u64 = 15;
+  
+
+    public fun add(a: u256, b: u256): u256 {
+        // Check for overflow before addition
+        assert!(a <= U256_MAX - b, ERROR_OVERFLOW);
+        let result = a + b;
+        // Verify the result
+        assert!(result >= a && result >= b, ERROR_OVERFLOW);
+        result
+    }
+
+    public fun sub(a: u256, b: u256): u256 {
+        // Check for underflow
+        assert!(a >= b, ERROR_UNDERFLOW);
+        let result = a - b;
+        // Verify the result
+        assert!(result <= a, ERROR_UNDERFLOW);
+        result
+    }
+
+    public fun mul(a: u256, b: u256): u256 {
+        if (a == 0 || b == 0) return 0;
+        // Check for overflow before multiplication
+        assert!(a <= U256_MAX / b, ERROR_OVERFLOW);
+        let result = a * b;
+        // Verify the result
+        assert!(result / a == b, ERROR_OVERFLOW);
+        result
+    }
+
+    public fun div(a: u256, b: u256): u256 {
+        // Check for divide by zero
+        assert!(b > 0, ERROR_DIVIDE_BY_ZERO);
+        a / b
     }
 
 
@@ -110,12 +170,10 @@ module dex::dex {
         trader: address
     }
 
-
     // Create pool function remains the same
     public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
-        fee_tier: u256
+        fee_tier: u256,
     ): Object<LiquidityPool<CoinTypeA, CoinTypeB>> {
-        // Validate fee tier
         assert!(
             fee_tier == FEE_TIER_LOW || 
             fee_tier == FEE_TIER_MEDIUM || 
@@ -123,16 +181,19 @@ module dex::dex {
             ERROR_INVALID_FEE_TIER
         );
 
-        
         let pool = LiquidityPool {
             coin_store_a: coin_store::create_coin_store<CoinTypeA>(),
             coin_store_b: coin_store::create_coin_store<CoinTypeB>(),
             total_supply: 0,
             minimum_liquidity: MINIMUM_LIQUIDITY,
             fee_tier,
+            state: PoolState {
+                paused: false,
+                admin: tx_context::sender(),
+                last_price: 0
+            }
         };
 
-        // Emit pool created event
         object::new(pool)
     }
 
@@ -290,23 +351,32 @@ module dex::dex {
     ) {
         assert!(reserve_a_after * reserve_b_after >= reserve_a * reserve_b, ERROR_INVALID_RATIO);
     }
-    
-    // Modified main swap function
+    // Swap function remains the same
     public fun swap<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_in: Coin<CoinTypeA>,
         min_out: u256,
+
     ): Coin<CoinTypeB> {
-        let amount_in = coin::value(&coin_in);
-        assert!(amount_in > 0, ERROR_ZERO_AMOUNT);
-    
         let pool_ref = object::borrow(pool);
+        // Check if pool is not paused
+        assert!(!pool_ref.state.paused, ERROR_PAUSED);
+    
+        let amount_in = coin::value(&coin_in);
+        // Basic checks
+        assert!(amount_in > 0, ERROR_ZERO_AMOUNT);
+        assert!(amount_in <= MAX_TRANSACTION_SIZE, ERROR_MAX_IMPACT);
+    
         let reserve_a = coin_store::balance(&pool_ref.coin_store_a);
         let reserve_b = coin_store::balance(&pool_ref.coin_store_b);
         assert!(reserve_a > 0 && reserve_b > 0, ERROR_INSUFFICIENT_LIQUIDITY);
         assert!(pool_ref.fee_tier <= FEE_DENOMINATOR, ERROR_INVALID_FEE);
     
-        // Calculate swap amounts using helper
+        // Price impact check
+        let price_impact = mul(amount_in, BASIS_POINTS) / reserve_a;
+        assert!(price_impact <= MAX_PRICE_IMPACT, ERROR_MAX_IMPACT);
+    
+        // Calculate swap amounts using safe math
         let (amount_out, fee_amount) = calculate_swap_amounts<CoinTypeA, CoinTypeB>(
             amount_in,
             reserve_a,
@@ -317,26 +387,44 @@ module dex::dex {
         assert!(amount_out >= min_out, ERROR_SLIPPAGE);
         assert!(amount_out < reserve_b, ERROR_INSUFFICIENT_LIQUIDITY);
     
-        // Verify constant product using helper
+        // Verify constant product using safe math
         verify_constant_product(
             reserve_a,
             reserve_b,
-            reserve_a + amount_in,
-            reserve_b - amount_out
+            add(reserve_a, amount_in),
+            sub(reserve_b, amount_out)
+        );
+    
+        let pool_mut = object::borrow_mut(pool);
+        
+        // Update pool state
+        pool_mut.state.last_price = div(
+            mul(amount_in, BASIS_POINTS),
+            amount_out
         );
     
         let pool_mut = object::borrow_mut(pool);
         coin_store::deposit(&mut pool_mut.coin_store_a, coin_in);
         let coin_out = coin_store::withdraw(&mut pool_mut.coin_store_b, amount_out);
-    
+
         event::emit(SwapEvent<CoinTypeA, CoinTypeB> {
             amount_in,
             amount_out,
             fee_amount,
             trader: tx_context::sender()
         });
-    
+
+
         coin_out
+    }
+
+    // Admin functions
+    public fun pause_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
+        pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
+    ) {
+        let pool_mut = object::borrow_mut(pool);
+        assert!(pool_mut.state.admin == tx_context::sender(), ERROR_UNAUTHORIZED);
+        pool_mut.state.paused = true;
     }
 
     fun init() {
@@ -348,7 +436,12 @@ module dex::dex {
             coin_store_b: coin_store::create_coin_store<TokenB>(),
             total_supply: 0,
             minimum_liquidity: default_min_liquidity,
-            fee_tier: default_fee_tier
+            fee_tier: default_fee_tier,
+            state: PoolState { // Add missing state field
+                paused: false,
+                admin: tx_context::sender(),
+                last_price: 0
+            }
         };
 
         let pool_obj = object::new(pool);
