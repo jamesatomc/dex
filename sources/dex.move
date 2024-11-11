@@ -461,4 +461,24 @@ module dex::dex {
         let pool_ref = object::borrow(pool);
         pool_ref.total_supply
     }
+
+    #[test]
+    fun test_math_operations() {
+        assert!(add(1, 2) == 3, 1);
+        assert!(sub(5, 3) == 2, 2);
+        assert!(mul(4, 3) == 12, 3);
+        assert!(div(8, 2) == 4, 4);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ERROR_OVERFLOW)]
+    fun test_add_overflow() {
+        add(U256_MAX, 1);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ERROR_UNDERFLOW)]
+    fun test_sub_underflow() {
+        sub(1, 2);
+    }
 }
