@@ -47,8 +47,6 @@ module dex::dex {
     // use std::option;
     // use std::string;
 
-
-
     // Fee tier constants
     const FEE_TIER_LOW: u256 = 1;    // 0.1%
     const FEE_TIER_MEDIUM: u256 = 5;  // 0.5%
