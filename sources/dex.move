@@ -120,7 +120,7 @@ module dex::dex {
     const ERROR_UNDERFLOW: u64 = 14;
     const ERROR_DIVIDE_BY_ZERO: u64 = 15;
   
-
+    // Safe math functions
     public fun add(a: u256, b: u256): u256 {
         // Check for overflow before addition
         assert!(a <= U256_MAX - b, ERROR_OVERFLOW);
@@ -129,6 +129,7 @@ module dex::dex {
         assert!(result >= a && result >= b, ERROR_OVERFLOW);
         result
     }
+    
 
     public fun sub(a: u256, b: u256): u256 {
         // Check for underflow
