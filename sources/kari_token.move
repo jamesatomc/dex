@@ -12,7 +12,7 @@ module dex::kari_token {
     const ERROR_ZERO_AMOUNT: u64 = 2;
 
     const DECIMALS: u8 = 8u8;
-    const INITIAL_SUPPLY: u256 = 10_000_000u256; // 10 million tokens
+    const INITIAL_SUPPLY: u256 = 1_100_000_000_000_000u256; // 11 million tokens
 
 
     struct KARI has key, store {}
