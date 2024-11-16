@@ -25,7 +25,7 @@ module dex::kari_token {
         let coin_info_obj = coin::register_extend<KARI>(
             string::utf8(b"KARI Token"),
             string::utf8(b"KARI"),
-             option::some(string::utf8(b"https://avatars.githubusercontent.com/u/127471673?s=200&v=4")), // Add icon URL
+            option::some(string::utf8(b"https://avatars.githubusercontent.com/u/127471673?s=200&v=4")), // Add icon URL
             DECIMALS,
         );
 
