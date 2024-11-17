@@ -3,6 +3,6 @@
 
 // Then update token_tests.move
 #[test_only]
-module dex::token_tests {
+module kanari_network::token_tests {
 
 }

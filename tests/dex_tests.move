@@ -1,6 +1,6 @@
 #[test_only]
-module dex::dex_tests {
-    use dex::dex::{Self, TokenA, TokenB};
+module kanari_network::dex_tests {
+    use kanari_network::dex::{Self, TokenA, TokenB};
     use moveos_std::object;
     use rooch_framework::coin;
     use moveos_std::tx_context;

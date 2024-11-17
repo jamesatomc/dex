@@ -1,4 +1,4 @@
-module dex::kari_token {
+module kanari_network::kari_token {
     use std::option;
     use std::string;
     use moveos_std::signer;
@@ -6,7 +6,7 @@ module dex::kari_token {
     use rooch_framework::coin;
     use rooch_framework::account_coin_store;
 
-    const ADMIN_ADDRESS: address = @dex;
+    const ADMIN_ADDRESS: address = @kanari_network;
     
     const ERROR_NOT_ADMIN: u64 = 1;
     const ERROR_ZERO_AMOUNT: u64 = 2;

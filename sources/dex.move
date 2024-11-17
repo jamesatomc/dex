@@ -37,7 +37,7 @@
 /// - `swap`: Performs a token swap in a specified pool
 /// - `init`: Initializes the module with default values
 
-module dex::dex {
+module kanari_network::dex {
     use moveos_std::object::{Self, Object};  // Updated import
     // use moveos_std::address;
     use rooch_framework::coin::{Self, Coin};

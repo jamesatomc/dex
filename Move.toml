@@ -1,5 +1,5 @@
 [package]
-name = "dex"
+name = "kanari_network"
 version = "0.0.1"
 
 [dependencies]
@@ -9,7 +9,7 @@ RoochFramework = { git = "https://github.com/rooch-network/rooch.git", subdir = 
 BitcoinMove = {  git = "https://github.com/rooch-network/rooch.git", subdir = "frameworks/bitcoin-move", rev = "main" }
 
 [addresses]
-dex = "0x6b5cb3b233c5afe5f8b92e3dd86a50a787ebe21117702d027c2e2e579fe7575e"
+kanari_network = "0x6b5cb3b233c5afe5f8b92e3dd86a50a787ebe21117702d027c2e2e579fe7575e"
 std = "0x1"
 moveos_std = "0x2"
 rooch_framework = "0x3"
