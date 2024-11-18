@@ -1,51 +1,14 @@
-/// This module implements a decentralized exchange (DEX) with liquidity pools and swap functionality.
-/// It allows users to create liquidity pools, add liquidity, remove liquidity, and perform token swaps.
-///
-/// # Constants
-/// - `FEE_TIER_LOW`: Low fee tier (0.1%)
-/// - `FEE_TIER_MEDIUM`: Medium fee tier (0.5%)
-/// - `FEE_TIER_HIGH`: High fee tier (1.0%)
-/// - `FEE_DENOMINATOR`: Denominator for fee calculation
-/// - `MINIMUM_LIQUIDITY`: Minimum liquidity required for a pool
-/// - `BASIS_POINTS`: Basis points for calculations
-///
-/// # Error Codes
-/// - `ERROR_ZERO_AMOUNT`: Error code for zero amount
-/// - `ERROR_INSUFFICIENT_LIQUIDITY`: Error code for insufficient liquidity
-/// - `ERROR_SLIPPAGE`: Error code for slippage
-/// - `ERROR_INVALID_RATIO`: Error code for invalid ratio
-/// - `ERROR_EXCEEDS_TOTAL_SUPPLY`: Error code for exceeding total supply
-/// - `ERROR_INVALID_FEE_TIER`: Error code for invalid fee tier
-/// - `ERROR_INVALID_FEE`: Error code for invalid fee
-/// - `ERROR_SWAP_CALCULATION`: Error code for swap calculation error
-///
-/// # Events
-/// - `LiquidityAdded`: Event emitted when liquidity is added
-/// - `LiquidityRemoved`: Event emitted when liquidity is removed
-/// - `Swap`: Event emitted when a swap is performed
-///
-/// # Structs
-/// - `LiquidityPool`: Represents a liquidity pool with two coin types
-/// - `TokenA`: Represents a concrete token type A
-/// - `TokenB`: Represents a concrete token type B
-/// - `SwapEvent`: Represents a swap event with details of the swap
-///
-/// # Functions
-/// - `create_pool`: Creates a new liquidity pool with a specified fee tier
-/// - `add_liquidity`: Adds liquidity to a specified pool
-/// - `remove_liquidity`: Removes liquidity from a specified pool
-/// - `swap`: Performs a token swap in a specified pool
-/// - `init`: Initializes the module with default values
-
 module kanari_network::dex {
     use moveos_std::object::{Self, Object};  // Updated import
-    // use moveos_std::address;
+    use moveos_std::address;
     use rooch_framework::coin::{Self, Coin};
     use rooch_framework::coin_store::{Self, CoinStore};
+    use rooch_framework::timestamp;
+    use rooch_framework::transfer;
     use moveos_std::event;
     use moveos_std::tx_context::{Self};
-    // use std::option;
-    // use std::string;
+    use std::option;
+    use std::string;
 
     // Fee tier constants
     const FEE_TIER_LOW: u256 = 1;    // 0.1%
