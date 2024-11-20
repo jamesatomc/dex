@@ -9,7 +9,7 @@ RoochFramework = { git = "https://github.com/rooch-network/rooch.git", subdir = 
 BitcoinMove = {  git = "https://github.com/rooch-network/rooch.git", subdir = "frameworks/bitcoin-move", rev = "main" }
 
 [addresses]
-kanari_network = "0xe454cffdfccf8e4d03030083339fa29356040cee45fd3a51f5046abeaba0681a"
+kanari_network = ""
 std = "0x1"
 moveos_std = "0x2"
 rooch_framework = "0x3"
