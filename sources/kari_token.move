@@ -31,7 +31,7 @@ module kanari_network::kari_token {
         coin_info: Object<coin::CoinInfo<KARI>>,
     }
 
-
+    // Define events
     struct NameUpdateEvent has copy, drop, store {
         old_name: string::String,
         new_name: string::String,
@@ -83,7 +83,7 @@ module kanari_network::kari_token {
         account_coin_store::deposit_extend(to, coin);
     }
 
-    //
+    // Burn tokens
     public entry fun burn(account: &signer, amount: u256) {
         assert!(amount > 0, ERROR_ZERO_AMOUNT);
         
@@ -94,6 +94,7 @@ module kanari_network::kari_token {
         coin::burn_extend<KARI>(&mut token_admin.coin_info, coin);
     }
 
+    // Transfer tokens
     public entry fun transfer(from: &signer, to: address, amount: u256) {
         assert!(amount > 0, ERROR_ZERO_AMOUNT);
         account_coin_store::transfer_extend<KARI>(signer::address_of(from), to, amount);
@@ -155,11 +156,12 @@ module kanari_network::kari_token {
         });
     }
 
-
+    // Get token info
     public fun get_info(): &coin::CoinInfo<KARI> {
         coin::coin_info<KARI>()
     }
-
+    
+    // Get token balance
     public fun get_balance(account: address): u256 {
         account_coin_store::balance<KARI>(account)
     }
