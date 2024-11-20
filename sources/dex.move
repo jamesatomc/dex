@@ -92,7 +92,6 @@ module kanari_network::dex {
         assert!(result >= a && result >= b, ERROR_OVERFLOW);
         result
     }
-    
 
     public fun sub(a: u256, b: u256): u256 {
         // Check for underflow
@@ -132,8 +131,8 @@ module kanari_network::dex {
         trader: address
     }
 
-    // Create pool function remains the same
-    public fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
+    // Internal implementation function
+    fun create_pool_internal<CoinTypeA: key + store, CoinTypeB: key + store>(
         fee_tier: u256,
     ): Object<LiquidityPool<CoinTypeA, CoinTypeB>> {
         assert!(
@@ -157,6 +156,16 @@ module kanari_network::dex {
         };
 
         object::new(pool)
+    }
+
+    // Public entry wrapper
+    public entry fun create_pool<CoinTypeA: key + store, CoinTypeB: key + store>(
+        fee_tier: u256,
+        
+    ) {
+        let pool = create_pool_internal<CoinTypeA, CoinTypeB>(fee_tier);
+        
+        object::transfer(pool, tx_context::sender());
     }
 
     // Add this at the top of the module with other struct definitions
@@ -206,7 +215,7 @@ module kanari_network::dex {
         );
     }
     
-    // Updated add_liquidity function
+    // add_liquidity function
     public fun add_liquidity<CoinTypeA: key + store, CoinTypeB: key + store>(
         pool: &mut Object<LiquidityPool<CoinTypeA, CoinTypeB>>,
         coin_a: Coin<CoinTypeA>,
